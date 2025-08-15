@@ -54,6 +54,12 @@ class LRItem:
         return LRItem(lhs, rhs)
 
 class Parser:
+    class State:
+        def __init__(self, number, lr_items):
+            self.number = number
+            self.lr_items = lr_items
+        
+        
     def __init__(self, grammar: Grammar):
         self.grammar = grammar    # It's assumed that the first nonterminal in each grammar is always S
         local_s = [item for item in grammar.non_terminals if str(item.name) == "S"][0]
