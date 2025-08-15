@@ -29,15 +29,66 @@ class Grammar:
     def __str__(self):
         return "\n".join(map(str, self.rules))
 
+class Dot:
+    value = "."
+    
+    def __str__(self):
+        return self.value
+
 class Parser:
     def __init__(self, grammar: Grammar):
-        self.grammar = grammar
+        self.grammar = grammar    # It's assumed that the first nonterminal in each grammar is always S
+        local_s = [item for item in grammar.non_terminals if str(item.name) == "S"][0]
+        local_s_prim = NonTerminal("S^")
+        
+        extended_nonterminals = [local_s_prim] + (grammar.non_terminals)
+        print("________________")
+        print(item for item in extended_nonterminals)
+        
+        self.extended_grammar = Grammar(grammar.terminals, extended_nonterminals, [Rule(local_s_prim, local_s)] + (grammar.rules))
+        print(self.grammar.rules)
 
-    def create_states_dfa(self):
-        pass
+        self.states = self.create_states()
+
+    def create_states(self):
+        for rule in self.extended_grammar.rules:
+            for i in range(len(rule.rhs)):
+                print(LRItem.make_from_rule(rule, i))
+        
     
     def create_parse_table(self):
         pass
     
     def parse(self, string: str):
         pass
+    
+if __name__ == "__main__":
+    S = NonTerminal("S")
+    C = NonTerminal("C")
+    A = NonTerminal("A")
+    B = NonTerminal("B")
+    
+    a = Terminal("a")
+    
+    r1 = Rule(S, [C])
+    r2 = Rule(C, [A,B])
+    r3 = Rule(A, [a])
+    r4 = Rule(B, [a])
+    
+    print(r1)
+    print(r2)
+    print(r3)
+    print(r4)
+    
+    terminals = [a]
+    nonterminals = [S, C, A, B]
+    rules = [r1, r2, r3, r4]
+    
+    g1 = Grammar(terminals, nonterminals, rules)
+    
+    p1 = Parser(g1)
+    
+    print(LRItem.make_from_rule(r1, 1))
+    print(LRItem.make_from_rule(r1, 0))
+    print(LRItem.make_from_rule(r1, 2))
+    
