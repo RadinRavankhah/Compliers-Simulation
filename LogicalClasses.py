@@ -28,3 +28,16 @@ class Grammar:
 
     def __str__(self):
         return "\n".join(map(str, self.rules))
+
+class Parser:
+    def __init__(self, grammar: Grammar):
+        self.grammar = grammar
+
+    def create_states_dfa(self):
+        pass
+    
+    def create_parse_table(self):
+        pass
+    
+    def parse(self, string: str):
+        pass
