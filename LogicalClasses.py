@@ -35,6 +35,24 @@ class Dot:
     def __str__(self):
         return self.value
 
+class LRItem:
+    def __init__(self, lhs: NonTerminal, rhs: list[Terminal | NonTerminal | Dot]):
+        self.lhs = lhs
+        self.rhs = rhs
+        
+    def __str__(self):
+        return f"{self.lhs} -> {' '.join(map(str, self.rhs))}"
+    
+    def make_from_rule(rule: Rule, dot_index_to_add: int):
+        if dot_index_to_add > len(rule.rhs):
+            raise ValueError("the index for dot cant be bigger than length of the rhs")
+        
+        lhs = rule.lhs
+        rhs = [item for item in rule.rhs]
+        rhs.insert(dot_index_to_add, Dot())
+        
+        return LRItem(lhs, rhs)
+
 class Parser:
     def __init__(self, grammar: Grammar):
         self.grammar = grammar    # It's assumed that the first nonterminal in each grammar is always S
