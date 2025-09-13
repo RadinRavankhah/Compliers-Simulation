@@ -1,16 +1,35 @@
 class Terminal:
-    def __init__(self, name):
+    def __init__(self, name: str):
         self.name = name
 
     def __str__(self):
         return self.name
-    
+
+    def __repr__(self):
+        return f"Terminal({self.name!r})"
+
+    def __eq__(self, other):
+        return isinstance(other, Terminal) and self.name == other.name
+
+    def __hash__(self):
+        return hash(('T', self.name))
+
+
 class NonTerminal:
-    def __init__(self, name):
+    def __init__(self, name: str):
         self.name = name
 
     def __str__(self):
         return self.name
+
+    def __repr__(self):
+        return f"NonTerminal({self.name!r})"
+
+    def __eq__(self, other):
+        return isinstance(other, NonTerminal) and self.name == other.name
+
+    def __hash__(self):
+        return hash(('N', self.name))
     
 class Rule:
     def __init__(self, lhs: NonTerminal, rhs: list[Terminal | NonTerminal]):
