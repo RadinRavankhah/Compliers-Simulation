@@ -38,6 +38,15 @@ class Rule:
 
     def __str__(self):
         return f"{self.lhs} -> {' '.join(map(str, self.rhs))}"
+
+    def __repr__(self):
+        return f"Rule({self.lhs!r}, {self.rhs!r})"
+
+    def __eq__(self, other):
+        return isinstance(other, Rule) and self.lhs == other.lhs and self.rhs == other.rhs
+
+    def __hash__(self):
+        return hash((self.lhs, tuple(self.rhs)))
     
 class Grammar:
     def __init__(self, terminals: list[Terminal], non_terminals: list[NonTerminal], rules: list[Rule]):
