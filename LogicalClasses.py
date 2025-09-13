@@ -35,7 +35,7 @@ class Dot:
     def __str__(self):
         return self.value
 
-class LRItem:
+class LRRule:
     def __init__(self, lhs: NonTerminal, rhs: list[Terminal | NonTerminal | Dot]):
         self.lhs = lhs
         self.rhs = rhs
@@ -51,15 +51,20 @@ class LRItem:
         rhs = [item for item in rule.rhs]
         rhs.insert(dot_index_to_add, Dot())
         
-        return LRItem(lhs, rhs)
+        return LRRule(lhs, rhs)
 
-class Parser:
-    class State:
-        def __init__(self, number, lr_items):
-            self.number = number
-            self.lr_items = lr_items
+class State:
+    def __init__(self, number: int, lr_rules: list[LRRule]):
+        self.number = number
+        self.lr_items = lr_rules
         
-        
+class GoTo:
+    def __init__(self, from_state: State, to_state: State, character_item: Terminal | NonTerminal):
+        self.from_state = from_state
+        self.to_state = to_state
+        self.character_item = character_item
+                
+class Parser:            
     def __init__(self, grammar: Grammar):
         self.grammar = grammar    # It's assumed that the first nonterminal in each grammar is always S
         local_s = [item for item in grammar.non_terminals if str(item.name) == "S"][0]
@@ -67,19 +72,67 @@ class Parser:
         
         extended_nonterminals = [local_s_prim] + (grammar.non_terminals)
         print("________________")
-        print(item for item in extended_nonterminals)
+        # for item in extended_nonterminals:
+        #     print(item)
         
-        self.extended_grammar = Grammar(grammar.terminals, extended_nonterminals, [Rule(local_s_prim, local_s)] + (grammar.rules))
-        print(self.grammar.rules)
-
-        self.states = self.create_states()
-
-    def create_states(self):
-        for rule in self.extended_grammar.rules:
-            for i in range(len(rule.rhs)):
-                print(LRItem.make_from_rule(rule, i))
+        # for item in [Rule(local_s_prim, [local_s])] + (grammar.rules):
+        #     print(item)
         
+        self.extended_grammar = Grammar(grammar.terminals, extended_nonterminals, [Rule(local_s_prim, [local_s])] + (grammar.rules))
+        print(self.extended_grammar)
+
+        self.states = self.create_items()
+        for state in self.states:
+            print(state)
+
+    def create_items(self, lrrule: LRRule = None):
+        lrrules = []
+        
+        # if lrrule == None:
+        #     lrrule = LRRule.make_from_rule(self.extended_grammar.rules[0], 0)
+        # else:
+        #     for i in range(len(lrrule.rhs)):
+        #         if type(lrrule.rhs[i]) == Dot:
+        #             if i < len(lrrule.rhs) - 1:
+        #                 lrrules.append(LRRule.make_from_rule(self.extended_grammar.rules[0], i + 1))
+        #             else:
+        #                 lrrules.append(LRRule.make_from_rule(self.extended_grammar.rules[0], i + 1))
+                    
+        
+        
+        # lrrules.append(lrrule)
+        
+        print("=============")
+        i0_closures = self.find_closures([LRRule.make_from_rule(self.extended_grammar.rules[0], 0)])
+        print(LRRule.make_from_rule(self.extended_grammar.rules[0], 0))
+        for item in i0_closures:
+            print(item)
+            
+        # for item in lrrules:
+            # print(item)
+            
+        # lritem = LRItem()
+        # lritem.rules_list = lrrules
+        
+        
+        
+        # return lrrules
+
+    def find_closures(self, lrrules: list[LRRule]):
+        closures_found = []
+        for lrrule in lrrules:
+            for item in lrrule.rhs:
+                if type(item) == Dot and lrrule.rhs.index(item) < len(lrrule.rhs) - 1 and type(lrrule.rhs[lrrule.rhs.index(item) + 1]) == NonTerminal:
+                    for rule in self.extended_grammar.rules:
+                        if rule.lhs == lrrule.rhs[lrrule.rhs.index(item) + 1]:
+                            closures_found.append(LRRule.make_from_rule(rule, 0))
+                            closures_found.extend(self.find_closures([LRRule.make_from_rule(rule, 0)]))
+        
+        return closures_found
     
+    def progress(self, state: State):
+        pass
+
     def create_parse_table(self):
         pass
     
@@ -95,24 +148,27 @@ if __name__ == "__main__":
     a = Terminal("a")
     
     r1 = Rule(S, [C])
+    r11 = Rule(S, [B])
     r2 = Rule(C, [A,B])
     r3 = Rule(A, [a])
     r4 = Rule(B, [a])
     
-    print(r1)
-    print(r2)
-    print(r3)
-    print(r4)
+    # print(r1)
+    # print(r2)
+    # print(r3)
+    # print(r4)
     
     terminals = [a]
     nonterminals = [S, C, A, B]
-    rules = [r1, r2, r3, r4]
+    rules = [r1, r11, r2, r3, r4]
     
     g1 = Grammar(terminals, nonterminals, rules)
-    
+    # print("----")
+    print(g1)
+    # print("------------------------")
     p1 = Parser(g1)
     
-    print(LRItem.make_from_rule(r1, 1))
-    print(LRItem.make_from_rule(r1, 0))
-    print(LRItem.make_from_rule(r1, 2))
+    # print(LRItem.make_from_rule(r1, 1))
+    # print(LRItem.make_from_rule(r1, 0))
+    # print(LRItem.make_from_rule(r1, 2))
     
