@@ -58,10 +58,27 @@ class Grammar:
         return "\n".join(map(str, self.rules))
 
 class Dot:
-    value = "."
-    
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
     def __str__(self):
-        return self.value
+        return "."
+
+    def __repr__(self):
+        return "Dot()"
+
+    def __eq__(self, other):
+        return isinstance(other, Dot)
+
+    def __hash__(self):
+        return hash(('DOT',))
+
+# convenient singleton reference used throughout:
+DOT = Dot()
 
 class LRRule:
     def __init__(self, lhs: NonTerminal, rhs: list[Terminal | NonTerminal | Dot]):
