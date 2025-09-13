@@ -130,81 +130,304 @@ class GoTo:
         self.to_state = to_state
         self.character_item = character_item
                 
-class Parser:            
-    def __init__(self, grammar: Grammar):
-        self.grammar = grammar    # It's assumed that the first nonterminal in each grammar is always S
-        local_s = [item for item in grammar.non_terminals if str(item.name) == "S"][0]
-        local_s_prim = NonTerminal("S^")
-        
-        extended_nonterminals = [local_s_prim] + (grammar.non_terminals)
-        print("________________")
-        # for item in extended_nonterminals:
-        #     print(item)
-        
-        # for item in [Rule(local_s_prim, [local_s])] + (grammar.rules):
-        #     print(item)
-        
-        self.extended_grammar = Grammar(grammar.terminals, extended_nonterminals, [Rule(local_s_prim, [local_s])] + (grammar.rules))
-        print(self.extended_grammar)
+class Parser:
+    def __init__(self, grammar: Grammar, debug: bool = False):
+        """
+        grammar: original grammar (non-augmented)
+        debug: optional flag to print internal states (closures / transitions)
+        """
+        self.grammar = grammar
+        self.debug = debug
 
-        self.states = self.create_items()
-        for state in self.states:
-            print(state)
+        # choose start symbol as the first nonterminal (your comment said that's assumed)
+        self.start_symbol = grammar.non_terminals[0]
+        self.augmented_start = NonTerminal(self.start_symbol.name + "^")
 
-    def create_items(self, lrrule: LRRule = None):
-        lrrules = []
-        
-        # if lrrule == None:
-        #     lrrule = LRRule.make_from_rule(self.extended_grammar.rules[0], 0)
-        # else:
-        #     for i in range(len(lrrule.rhs)):
-        #         if type(lrrule.rhs[i]) == Dot:
-        #             if i < len(lrrule.rhs) - 1:
-        #                 lrrules.append(LRRule.make_from_rule(self.extended_grammar.rules[0], i + 1))
-        #             else:
-        #                 lrrules.append(LRRule.make_from_rule(self.extended_grammar.rules[0], i + 1))
-                    
-        
-        
-        # lrrules.append(lrrule)
-        
-        print("=============")
-        i0_closures = self.find_closures([LRRule.make_from_rule(self.extended_grammar.rules[0], 0)])
-        print(LRRule.make_from_rule(self.extended_grammar.rules[0], 0))
-        for item in i0_closures:
-            print(item)
-            
-        # for item in lrrules:
-            # print(item)
-            
-        # lritem = LRItem()
-        # lritem.rules_list = lrrules
-        
-        
-        
-        # return lrrules
+        # build extended grammar: augmented start + original nonterminals/rules
+        extended_nonterminals = [self.augmented_start] + grammar.non_terminals
+        extended_rules = [Rule(self.augmented_start, [self.start_symbol])] + grammar.rules
+        self.extended_grammar = Grammar(grammar.terminals, extended_nonterminals, extended_rules)
 
-    def find_closures(self, lrrules: list[LRRule]):
-        closures_found = []
-        for lrrule in lrrules:
-            for item in lrrule.rhs:
-                if type(item) == Dot and lrrule.rhs.index(item) < len(lrrule.rhs) - 1 and type(lrrule.rhs[lrrule.rhs.index(item) + 1]) == NonTerminal:
-                    for rule in self.extended_grammar.rules:
-                        if rule.lhs == lrrule.rhs[lrrule.rhs.index(item) + 1]:
-                            closures_found.append(LRRule.make_from_rule(rule, 0))
-                            closures_found.extend(self.find_closures([LRRule.make_from_rule(rule, 0)]))
-        
-        return closures_found
-    
-    def progress(self, state: State):
-        pass
+        # canonical collection (states) and transitions
+        self.states: list[State] = []
+        # transitions: map (state_number, symbol) -> state_number
+        self.transitions: dict[tuple[int, Terminal | NonTerminal], int] = {}
 
+        # build LR(0) canonical collection
+        self._build_states()
+
+        # compute FIRST/FOLLOW (FOLLOW used by SLR)
+        self.first_sets = self.compute_first_sets()
+        self.follow_sets = self.compute_follow_sets()
+
+        # SLR parse table
+        self.action_table = {}   # (state, terminal_name) -> ('s', j) | ('r', rule_index) | ('acc',)
+        self.goto_table = {}     # (state, nonterminal_name) -> j
+        self.create_parse_table()
+
+        if self.debug:
+            print("=== ACTION TABLE ===")
+            for k, v in sorted(self.action_table.items()):
+                print(k, ":", v)
+            print("=== GOTO TABLE ===")
+            for k, v in sorted(self.goto_table.items()):
+                print(k, ":", v)
+
+    # ---------- closure ----------
+    def closure(self, items: set[LRRule]) -> set[LRRule]:
+        closure = set(items)
+        added = True
+        while added:
+            added = False
+            new_items = set()
+            for item in list(closure):
+                idx = item.dot_index()
+                if idx is None:
+                    continue
+                if idx < len(item.rhs) - 1:
+                    X = item.rhs[idx + 1]
+                    if isinstance(X, NonTerminal):
+                        # for every production X -> gamma, add X -> . gamma
+                        for rule in self.extended_grammar.rules:
+                            if rule.lhs == X:
+                                lr = LRRule.make_from_rule(rule, 0)
+                                if lr not in closure:
+                                    new_items.add(lr)
+            if new_items:
+                closure |= new_items
+                added = True
+        return closure
+
+    # ---------- goto ----------
+    def goto(self, items: set[LRRule], X: Terminal | NonTerminal) -> set[LRRule]:
+        moved = set()
+        for item in items:
+            idx = item.dot_index()
+            if idx is None:
+                continue
+            if idx < len(item.rhs) - 1 and item.rhs[idx + 1] == X:
+                # create a copy of rhs and move dot one position to the right
+                new_rhs = list(item.rhs)
+                new_rhs[idx], new_rhs[idx + 1] = new_rhs[idx + 1], new_rhs[idx]
+                moved.add(LRRule(item.lhs, new_rhs))
+        return self.closure(moved) if moved else set()
+
+    # ---------- build canonical collection ----------
+    def _build_states(self):
+        start_item = LRRule.make_from_rule(self.extended_grammar.rules[0], 0)
+        I0 = self.closure({start_item})
+
+        states = [I0]
+        state_map = {frozenset(I0): 0}
+        transitions = {}
+
+        i = 0
+        while i < len(states):
+            I = states[i]
+            # find all grammar symbols that appear immediately after a dot in I
+            symbols_after_dot = set()
+            for it in I:
+                idx = it.dot_index()
+                if idx is not None and idx < len(it.rhs) - 1:
+                    symbols_after_dot.add(it.rhs[idx + 1])
+
+            for X in symbols_after_dot:
+                J = self.goto(I, X)
+                if not J:
+                    continue
+                key = frozenset(J)
+                if key not in state_map:
+                    state_map[key] = len(states)
+                    states.append(J)
+                transitions[(i, X)] = state_map[key]
+            i += 1
+
+        # convert to State objects for nicer printing/use
+        self.states = [State(num, list(itemset)) for num, itemset in enumerate(states)]
+        self.transitions = transitions
+
+        if self.debug:
+            print("=== STATES ===")
+            for s in self.states:
+                print(s)
+            print("=== TRANSITIONS ===")
+            for k, v in sorted(transitions.items(), key=lambda kv: (kv[0][0], str(kv[0][1]))):
+                print(f"from state {k[0]} on {k[1]} -> state {v}")
+
+    # ---------- FIRST sets (basic) ----------
+    def compute_first_sets(self):
+        terminals = self.grammar.terminals
+        nonterminals = self.grammar.non_terminals
+        rules = self.grammar.rules
+
+        first = {nt: set() for nt in nonterminals}
+        for t in terminals:
+            first[t] = {t}
+
+        # iterate until stable (this version assumes grammar without epsilon productions for simplicity)
+        changed = True
+        while changed:
+            changed = False
+            for rule in rules:
+                A = rule.lhs
+                rhs = rule.rhs
+                # if rhs starts with a terminal, add it; if starts with nonterminal, add first(nonterminal)
+                if not rhs:
+                    continue
+                first_sym = set()
+                first_item = rhs[0]
+                if isinstance(first_item, Terminal):
+                    first_sym.add(first_item)
+                else:
+                    first_sym |= first[first_item]
+                before = len(first[A])
+                first[A] |= first_sym
+                if len(first[A]) != before:
+                    changed = True
+        return first
+
+    # ---------- FOLLOW sets ----------
+    def compute_follow_sets(self):
+        terminals = self.grammar.terminals
+        nonterminals = self.grammar.non_terminals
+        rules = self.grammar.rules
+
+        follow = {nt: set() for nt in nonterminals}
+        # end marker in follow of start symbol
+        follow[self.start_symbol].add(Terminal('$'))
+
+        changed = True
+        while changed:
+            changed = False
+            for rule in rules:
+                A = rule.lhs
+                rhs = rule.rhs
+                for i, B in enumerate(rhs):
+                    if isinstance(B, NonTerminal):
+                        beta = rhs[i+1:]
+                        if not beta:
+                            # add FOLLOW(A) to FOLLOW(B)
+                            before = len(follow[B])
+                            follow[B] |= follow[A]
+                            if len(follow[B]) != before:
+                                changed = True
+                        else:
+                            # FIRST(beta) - epsilon -> add to FOLLOW(B)
+                            first_beta = set()
+                            first_sym = beta[0]
+                            if isinstance(first_sym, Terminal):
+                                first_beta.add(first_sym)
+                            else:
+                                # nonterminal
+                                first_beta |= self.first_sets.get(first_sym, set())
+                            before = len(follow[B])
+                            follow[B] |= first_beta
+                            if len(follow[B]) != before:
+                                changed = True
+        return follow
+
+    # ---------- SLR parse table ----------
     def create_parse_table(self):
-        pass
-    
-    def parse(self, string: str):
-        pass
-    
+        action = {}
+        goto = {}
+
+        for i, state in enumerate(self.states):
+            for item in state.lr_items:
+                idx = item.dot_index()
+                if idx is None:
+                    continue
+
+                # Case 1: dot before a grammar symbol
+                if idx < len(item.rhs) - 1:
+                    a = item.rhs[idx + 1]
+                    if isinstance(a, Terminal):
+                        j = self.transitions.get((i, a))
+                        if j is not None:
+                            key = (i, a.name)
+                            if key in action and action[key] != ('s', j):
+                                # conflict - we simply print it for now (educational)
+                                print("ACTION conflict at", key, "existing:", action[key], "new shift:", ('s', j))
+                            action[key] = ('s', j)
+                    else:
+                        # nonterminal -> goto entry
+                        j = self.transitions.get((i, a))
+                        if j is not None:
+                            goto[(i, a.name)] = j
+
+                # Case 2: dot at the end -> reduce or accept
+                else:
+                    # check augmented accept
+                    if item.lhs == self.augmented_start:
+                        action[(i, '$')] = ('acc',)
+                    else:
+                        # produce reduction by finding the matching production index in extended_grammar.rules
+                        prod_rhs = [sym for sym in item.rhs if not isinstance(sym, Dot)]
+                        red_index = None
+                        for idx_r, rule in enumerate(self.extended_grammar.rules):
+                            if rule.lhs == item.lhs and rule.rhs == prod_rhs:
+                                red_index = idx_r
+                                break
+                        if red_index is None:
+                            raise RuntimeError("Could not find production for reduction: " + str(item))
+
+                        # SLR: apply reduce on all terminals in FOLLOW(item.lhs)
+                        follow_set = self.follow_sets.get(item.lhs, set())
+                        for a in follow_set:
+                            key = (i, a.name)
+                            if key in action and action[key] != ('r', red_index):
+                                print("ACTION conflict at", key, "existing:", action[key], "new reduce:", ('r', red_index))
+                            action[key] = ('r', red_index)
+
+        # store tables
+        self.action_table = action
+        self.goto_table = goto
+
+    # ---------- parse using tables ----------
+    def parse(self, input_str: str) -> bool:
+        """Parse a space-separated string of terminal names, e.g. 'a a', return True on accept."""
+        # tokenize input
+        tokens = [Terminal(tok) for tok in input_str.split() if tok != ""]
+        tokens.append(Terminal('$'))
+
+        # stack of states and stack of symbols
+        state_stack = [0]
+        symbol_stack: list[Terminal | NonTerminal] = []
+
+        ip = 0
+        while True:
+            state = state_stack[-1]
+            a_name = tokens[ip].name
+            act = self.action_table.get((state, a_name))
+            if act is None:
+                raise RuntimeError(f"Parse error at token {tokens[ip]!r} in state {state}")
+
+            if act[0] == 's':  # shift
+                j = act[1]
+                symbol_stack.append(tokens[ip])
+                state_stack.append(j)
+                ip += 1
+            elif act[0] == 'r':  # reduce
+                r_idx = act[1]
+                rule = self.extended_grammar.rules[r_idx]
+                rhs_len = len(rule.rhs)
+                # pop rhs_len symbols and states
+                for _ in range(rhs_len):
+                    if symbol_stack:
+                        symbol_stack.pop()
+                    state_stack.pop()
+                # push LHS and goto
+                symbol_stack.append(rule.lhs)
+                t = state_stack[-1]
+                goto_state = self.goto_table.get((t, rule.lhs.name))
+                if goto_state is None:
+                    raise RuntimeError("Goto missing after reduction")
+                state_stack.append(goto_state)
+            elif act[0] == 'acc':
+                return True
+            else:
+                raise RuntimeError("Unknown action entry: " + str(act))
+
+
 if __name__ == "__main__":
     S = NonTerminal("S")
     C = NonTerminal("C")
