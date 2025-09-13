@@ -399,7 +399,9 @@ class Parser:
             a_name = tokens[ip].name
             act = self.action_table.get((state, a_name))
             if act is None:
-                raise RuntimeError(f"Parse error at token {tokens[ip]!r} in state {state}")
+                if self.debug:
+                    print(f"[ERROR] Parse error at token {tokens[ip]!r} in state {state}")
+                return False
 
             if act[0] == 's':  # shift
                 j = act[1]
@@ -453,4 +455,4 @@ if __name__ == "__main__":
 
     p1 = Parser(g1, debug=True)
     print("parse 'a a' =>", p1.parse("a a"))
-    print("parse 'a'   =>", p1.parse("a"))
+    print("parse 'a b'   =>", p1.parse("a b"))
