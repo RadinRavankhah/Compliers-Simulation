@@ -84,19 +84,34 @@ class LRRule:
     def __init__(self, lhs: NonTerminal, rhs: list[Terminal | NonTerminal | Dot]):
         self.lhs = lhs
         self.rhs = rhs
-        
+
     def __str__(self):
         return f"{self.lhs} -> {' '.join(map(str, self.rhs))}"
-    
+
+    def __repr__(self):
+        return f"LRRule({self.lhs!r}, {self.rhs!r})"
+
+    @staticmethod
     def make_from_rule(rule: Rule, dot_index_to_add: int):
-        if dot_index_to_add > len(rule.rhs):
-            raise ValueError("the index for dot cant be bigger than length of the rhs")
-        
+        if dot_index_to_add < 0 or dot_index_to_add > len(rule.rhs):
+            raise ValueError("the index for dot must be between 0 and len(rhs)")
         lhs = rule.lhs
         rhs = [item for item in rule.rhs]
-        rhs.insert(dot_index_to_add, Dot())
-        
+        rhs.insert(dot_index_to_add, DOT)
         return LRRule(lhs, rhs)
+
+    def dot_index(self):
+        """Return the index of the Dot in rhs (or None if missing)."""
+        for i, sym in enumerate(self.rhs):
+            if isinstance(sym, Dot):
+                return i
+        return None
+
+    def __eq__(self, other):
+        return isinstance(other, LRRule) and self.lhs == other.lhs and self.rhs == other.rhs
+
+    def __hash__(self):
+        return hash((self.lhs, tuple(self.rhs)))
 
 class State:
     def __init__(self, number: int, lr_rules: list[LRRule]):
