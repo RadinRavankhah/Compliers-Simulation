@@ -117,7 +117,13 @@ class State:
     def __init__(self, number: int, lr_rules: list[LRRule]):
         self.number = number
         self.lr_items = lr_rules
-        
+
+    def __repr__(self):
+        return f"State({self.number}, items={self.lr_items!r})"
+
+    def __str__(self):
+        return f"State {self.number}:\n" + "\n".join("  " + str(item) for item in self.lr_items)
+
 class GoTo:
     def __init__(self, from_state: State, to_state: State, character_item: Terminal | NonTerminal):
         self.from_state = from_state
