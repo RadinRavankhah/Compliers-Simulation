@@ -428,36 +428,29 @@ class Parser:
                 raise RuntimeError("Unknown action entry: " + str(act))
 
 
+# --- main/demo usage example ---
 if __name__ == "__main__":
     S = NonTerminal("S")
     C = NonTerminal("C")
     A = NonTerminal("A")
     B = NonTerminal("B")
-    
+
     a = Terminal("a")
-    
+
     r1 = Rule(S, [C])
     r11 = Rule(S, [B])
-    r2 = Rule(C, [A,B])
+    r2 = Rule(C, [A, B])
     r3 = Rule(A, [a])
     r4 = Rule(B, [a])
-    
-    # print(r1)
-    # print(r2)
-    # print(r3)
-    # print(r4)
-    
+
     terminals = [a]
     nonterminals = [S, C, A, B]
     rules = [r1, r11, r2, r3, r4]
-    
+
     g1 = Grammar(terminals, nonterminals, rules)
-    # print("----")
+    print("Grammar:")
     print(g1)
-    # print("------------------------")
-    p1 = Parser(g1)
-    
-    # print(LRItem.make_from_rule(r1, 1))
-    # print(LRItem.make_from_rule(r1, 0))
-    # print(LRItem.make_from_rule(r1, 2))
-    
+
+    p1 = Parser(g1, debug=True)
+    print("parse 'a a' =>", p1.parse("a a"))
+    print("parse 'a'   =>", p1.parse("a"))
